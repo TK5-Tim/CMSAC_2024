@@ -47,7 +47,7 @@ players<-add_player_identifiers(players,position_name="officialPosition")
 plays<-read.csv('plays.csv')
 games<-read.csv("games.csv")
 pffData<-read.csv("pffScoutingData.csv")
-nfl_pbp<-nflreadr::load_pbp(2023)
+nfl_pbp<-nflreadr::load_pbp(2021)
 
 str(nfl_pbp)
 str(games)
@@ -264,16 +264,96 @@ play_feats<-plays%>%select(
 )
 
 pres_model_df<-df_wide%>%
-  inner_join(play_feats,by=c('gameId','playId'))
-
-###
-
-write_parquet(pres_model_df, paste0('pressure_model_df','.parquet'))
+  inner_join(play_feats,by=c('gameId','playId'))%>%mutate(
+    los = ifelse(playDirection == "left", 120 - absoluteYardlineNumber, absoluteYardlineNumber),
+  )
 
 
+pres_model_df%>%head(140)%>%View()
+
+nfl_pbp_feat<-nfl_pbp%>%select(play_id,
+                               old_game_id,
+                               ydstogo,
+                               xpass)%>%mutate(
+                                 playId = as.integer(play_id),
+                                 gameId = as.integer(old_game_id)
+                               )%>%select(-play_id,-old_game_id)
+
+pres_model_df<-pres_model_df%>%left_join(nfl_pbp_feat,by=c('gameId','playId'))
+
+
+model_features<-pres_model_df%>%filter(second_since_snap>=0)%>%select(gameId,
+                                       week,
+                                       playId,
+                                       frameId,
+                                       second_since_snap,
+                                       nflId,
+                                       is_pressure,
+                                       x,
+                                       y,
+                                       s,
+                                       o,
+                                       dir,
+                                       a,
+                                       qb_x,
+                                       qb_y,
+                                       qb_s,
+                                       qb_a,
+                                       qb_o,
+                                       qb_dir,
+                                       rel_o,
+                                       rel_s,
+                                       rush_qb_dist,
+                                       qb_dist_near_sideline,
+                                       approach_angle,
+                                       blk_rush_dist_1,
+                                       blk_rush_dist_2,
+                                       blk_rush_dist_3,
+                                       blocker_o_1,
+                                       blocker_o_2,
+                                       blocker_o_3,
+                                       blocker_dir_1,
+                                       blocker_dir_2,
+                                       blocker_dir_3,
+                                       blocker_s_1,
+                                       blocker_s_2,
+                                       blocker_s_3,
+                                       leverage_angle_1,
+                                       leverage_angle_2,
+                                       leverage_angle_3,
+                                       xpass,
+                                       ydstogo,
+                                       down,
+                                       defendersInBox,
+                                       blocker_x_1,
+                                       blocker_x_2,
+                                       blocker_x_3,
+                                       blocker_y_1,
+                                       blocker_y_2,
+                                       blocker_y_3,
+                                       los
+                                       )%>%mutate(
+                                         qb_dist_from_los = qb_x - los,
+                                         rush_dist_from_los = x - los,
+                                         blocker_1_dist_from_los = blocker_x_1 - los,
+                                         blocker_2_dist_from_los = blocker_x_2 - los,
+                                         blocker_3_dist_from_los = blocker_x_3 - los,
+                                       )%>%left_join(blocker_interference_df,by=c('gameId','playId','frameId','nflId'))%>%select(-los)
+
+
+model_features%>%head(200)%>%View()
+
+#write_parquet(pres_model_df, paste0('pressure_model_df','.parquet'))
+write_parquet(model_features, paste0('pressure_model_feat_df','.parquet'))
+
+
+
+#### Need to create the following features
+
+### line of scrimmage
+### distance from sideline and los
 
 
 
 
-  
   
